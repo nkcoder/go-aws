@@ -1,0 +1,7 @@
+name: create-readonly-user
+description: Create a new readonly user in aws.
+runtime: go
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: aws-go
