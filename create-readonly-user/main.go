@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/iam"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
@@ -56,11 +57,17 @@ func main() {
 			return err
 		}
 
+		loginUrl, err := getLoginUrl(ctx)
+		if err != nil {
+			return err
+		}
+
 		// Export the user and login information
 		ctx.Export("readonlyGroupName", readOnlyGroup.Name)
 		ctx.Export("readonlyUserName", readOnlyUser.Name)
 		ctx.Export("initialPassword", loginProfile.Password)
 		ctx.Export("passwordResetRequired", loginProfile.PasswordResetRequired)
+		ctx.Export("loginUrl", pulumi.String(loginUrl))
 
 		return nil
 	})
@@ -112,4 +119,14 @@ func createGroupIfNotExists(ctx *pulumi.Context, groupName string) (*iam.Group, 
 	}
 
 	return readOnlyGroup, nil
+}
+
+func getLoginUrl(ctx *pulumi.Context) (string, error) {
+	callerIdentity, err := aws.GetCallerIdentity(ctx, nil)
+	if err != nil {
+		return "", err
+	}
+
+	loginUrl := fmt.Sprintf("https://%s.signin.aws.amazon.com/console", callerIdentity.AccountId)
+	return loginUrl, nil
 }
