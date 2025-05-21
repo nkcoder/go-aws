@@ -1,12 +1,16 @@
-## Create a readonly user
+## What 
 
-Create a readonly group if it doesn't exist.
+Create a readonly user on AWS:
 
-Attach the `readonly` access to the group.
+1. Create a readonly group if it doesn't exist.
 
-Create a new user and add the user to the readonly group.
+2. Attach the `readonly` access to the group.
 
+3. Create a new user and add the user to the readonly group.
 
+## Why
+
+My manager asks me to configure a readonly account for him in our `dev` AWS account. 
 
 
 
