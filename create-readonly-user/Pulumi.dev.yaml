@@ -1,2 +1,6 @@
 config:
   aws:region: ap-southeast-2
+  create-readonly-user:userName: alan.chalmers
+  create-readonly-user:groupName: readonly-group
+  create-readonly-user:passwordLength: 16
+  create-readonly-user:passwordResetRequired: true
