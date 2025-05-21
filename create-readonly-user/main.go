@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/iam"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
@@ -8,37 +10,19 @@ import (
 
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
-		// Get configuration values with defaults
 		conf := config.New(ctx, "")
 
-		// Get group configuration
+		// Get configuration values
 		groupName := conf.Require("groupName")
-
-		// Get user configuration
 		userName := conf.Require("userName")
-
 		passwordLength := conf.RequireInt("passwordLength")
 		if passwordLength < 16 {
 			passwordLength = 16
 		}
-
 		passwordResetRequired := conf.RequireBool("passwordResetRequired")
 
-		// Create a readonly IAM group
-		readOnlyGroup, err := iam.NewGroup(ctx, "readonly-group", &iam.GroupArgs{
-			Name: pulumi.String(groupName),
-			Path: pulumi.String("/"),
-		})
-		if err != nil {
-			return err
-		}
-
-		// Attach the AWS managed ReadOnly policy to the group
-		// This policy provides readonly access to all AWS services
-		_, err = iam.NewGroupPolicyAttachment(ctx, "readonly-policy-attachment", &iam.GroupPolicyAttachmentArgs{
-			Group:     readOnlyGroup.Name,
-			PolicyArn: pulumi.String("arn:aws:iam::aws:policy/ReadOnlyAccess"),
-		})
+		// Create the group if it doesn't exist
+		readOnlyGroup, err := createGroupIfNotExists(ctx, groupName)
 		if err != nil {
 			return err
 		}
@@ -73,10 +57,59 @@ func main() {
 		}
 
 		// Export the user and login information
+		ctx.Export("readonlyGroupName", readOnlyGroup.Name)
 		ctx.Export("readonlyUserName", readOnlyUser.Name)
 		ctx.Export("initialPassword", loginProfile.Password)
 		ctx.Export("passwordResetRequired", loginProfile.PasswordResetRequired)
 
 		return nil
 	})
+}
+
+func createGroupIfNotExists(ctx *pulumi.Context, groupName string) (*iam.Group, error) {
+	// Check if the group already exists
+	var readOnlyGroup *iam.Group
+	var err error
+
+	// Try to get the existing group by name
+	existingGroup, err := iam.LookupGroup(ctx, &iam.LookupGroupArgs{
+		GroupName: groupName,
+	})
+
+	if err != nil || existingGroup == nil {
+		// Group doesn't exist, create it
+		readOnlyGroup, err = iam.NewGroup(ctx, "readonly-group", &iam.GroupArgs{
+			Name: pulumi.String(groupName),
+			Path: pulumi.String("/"),
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		// Attach the AWS managed ReadOnly policy to the group
+		// This policy provides readonly access to all AWS services
+		_, err = iam.NewGroupPolicyAttachment(ctx, "readonly-policy-attachment", &iam.GroupPolicyAttachmentArgs{
+			Group:     readOnlyGroup.Name,
+			PolicyArn: pulumi.String("arn:aws:iam::aws:policy/ReadOnlyAccess"),
+		})
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// Group exists, import it as a resource reference
+		existingGroupID := existingGroup.Id
+		ctx.Log.Info("Group already exists with ID: "+existingGroupID, nil)
+
+		// Create a reference to the existing group
+		var importErr error
+		readOnlyGroup, importErr = iam.NewGroup(ctx, "readonly-group-ref", &iam.GroupArgs{
+			Name: pulumi.String(groupName),
+		}, pulumi.Import(pulumi.ID(groupName)))
+
+		if importErr != nil {
+			return nil, fmt.Errorf("failed to import group '%s': %w", groupName, importErr)
+		}
+	}
+
+	return readOnlyGroup, nil
 }
